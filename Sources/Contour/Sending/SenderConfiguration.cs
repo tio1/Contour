@@ -95,6 +95,12 @@ namespace Contour.Sending
             return this;
         }
 
+        public ISenderConfiguration Delayed()
+        {
+            this.Options.Delayed = true;
+            return this;
+        }
+
         /// <summary>
         /// Проверяет корректность конфигурации.
         /// </summary>

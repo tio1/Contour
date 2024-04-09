@@ -29,6 +29,12 @@ namespace Contour.Sending
         ISenderConfigurator Persistently();
 
         /// <summary>
+        /// Сообщения будут доставляться с задержкой
+        /// </summary>
+        /// <returns>Sender configurator.</returns>
+        ISenderConfiguration Delayed();
+
+        /// <summary>
         /// Устанавливает псевдоним метки отправляемого сообщения.
         /// </summary>
         /// <param name="alias">Псевдоним метки отправляемого сообщения.</param>

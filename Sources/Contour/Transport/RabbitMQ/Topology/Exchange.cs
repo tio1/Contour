@@ -7,6 +7,8 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
+using System.Collections.Generic;
+
 namespace Contour.Transport.RabbitMQ.Topology
 {
     using Contour.Sending;
@@ -33,6 +35,7 @@ namespace Contour.Transport.RabbitMQ.Topology
             this.Type = ExchangeType.Direct;
             this.Durable = false;
             this.AutoDelete = false;
+            this.Arguments = new Dictionary<string, object>();
         }
 
         #endregion
@@ -58,6 +61,8 @@ namespace Contour.Transport.RabbitMQ.Topology
         /// Gets the type.
         /// </summary>
         public string Type { get; internal set; }
+
+        public IDictionary<string, object> Arguments { get; }
 
         #endregion
 

@@ -266,5 +266,13 @@ namespace Contour.Receiving
         {
             return this.configuration.WithQueueMaxLengthBytes(maxLengthBytes);
         }
+
+        /// <inheritdoc />
+        public IReceiverConfigurator Delayed()
+        {
+            this.configuration.Delayed();
+
+            return this;
+        }
     }
 }

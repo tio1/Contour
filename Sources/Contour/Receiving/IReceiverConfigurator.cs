@@ -87,6 +87,11 @@ namespace Contour.Receiving
         IReceiverConfigurator WithQueueLimit(int queueLimit);
         IReceiverConfigurator WithQueueMaxLengthBytes(int maxLengthBytes);
 
+        /// <summary>
+        /// Устанавливает ограничение на подключение только к отправителям, поддерживающим задержку доставки сообщений.
+        /// </summary>
+        /// <returns>Конфигуратор получателя.</returns>
+        IReceiverConfigurator Delayed();
     }
 
     /// <summary>

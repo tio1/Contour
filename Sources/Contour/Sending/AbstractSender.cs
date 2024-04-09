@@ -310,6 +310,11 @@ namespace Contour.Sending
             Maybe<bool> persist = BusOptions.Pick(options.Persistently, this.Configuration.Options.IsPersistently());
             Headers.ApplyPersistently(outputHeaders, persist);
 
+            if (this.Configuration.Options.Delayed)
+            {
+                Headers.ApplyDelay(outputHeaders, options.Delay);
+            }
+            
             Maybe<TimeSpan?> ttl = BusOptions.Pick(options.Ttl, this.Configuration.Options.GetTtl());
             Headers.ApplyTtl(outputHeaders, ttl);
             Headers.ApplyAdditionalHeaders(outputHeaders, options.AdditionalHeaders);

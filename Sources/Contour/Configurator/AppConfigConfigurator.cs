@@ -230,6 +230,11 @@ namespace Contour.Configurator
                     configurator.WithRequestTimeout(outgoingElement.Timeout);
                 }
 
+                if (outgoingElement.Delayed)
+                {
+                    configurator.Delayed();
+                }
+
                 // Connection string
                 var connectionString = endpointConfig.ConnectionString;
                 if (!string.IsNullOrEmpty(outgoingElement.ConnectionString))
@@ -324,6 +329,12 @@ namespace Contour.Configurator
                 if (incomingElement.RequiresAccept)
                 {
                     configurator.RequiresAccept();
+                }
+
+                // Delayed
+                if (incomingElement.Delayed)
+                {
+                    configurator.Delayed();
                 }
 
                 // Connection string

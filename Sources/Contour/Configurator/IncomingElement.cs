@@ -114,6 +114,9 @@ namespace Contour.Configurator
             get { return (int?)base["queueMaxLengthBytes"]; }
         }
 
+        [ConfigurationProperty("delayed")]
+        public bool Delayed => (bool)base["delayed"];
+
         IQos IIncoming.Qos => this.Qos;
     }
 }

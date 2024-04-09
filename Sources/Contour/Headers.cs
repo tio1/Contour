@@ -49,6 +49,11 @@ namespace Contour
         public static readonly string Ttl = "x-ttl";
 
         /// <summary>
+        /// Задержка отправки сообщения
+        /// </summary>
+        public static readonly string Delay = "x-delay";
+
+        /// <summary>
         /// Время жизни сообщений в очереди.
         /// </summary>
         public static readonly string QueueMessageTtl = "x-message-ttl";
@@ -206,6 +211,15 @@ namespace Contour
             headers[SentTimestamp] = sent;
         }
 
+        
+        public static void ApplyDelay(Dictionary<string, object> headers, TimeSpan? delay)
+        {
+            if (delay.HasValue)
+            {
+                headers[Delay] = delay.Value.TotalMilliseconds;
+            }
+        }
+        
         /// <summary>
         /// Применяет к коллекции заголовков установку заголовка <c>Ttl</c>.
         /// </summary>

@@ -88,6 +88,12 @@ namespace Contour.Configurator
             get { return (bool?)base["reuseConnection"]; }
         }
 
+        /// <summary>
+        /// Gets the delayed.
+        /// </summary>
+        [ConfigurationProperty("delayed", DefaultValue = false)]
+        public bool Delayed => (bool)base["delayed"];
+
         ICallbackEndpoint IOutgoing.CallbackEndpoint => this.CallbackEndpoint;
     }
 }
