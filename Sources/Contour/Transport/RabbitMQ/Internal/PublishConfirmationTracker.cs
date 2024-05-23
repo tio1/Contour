@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Common.Logging;
 using Contour.Helpers;
@@ -90,12 +91,31 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <returns>
         /// The <see cref="Task"/> which can be used to check if confirmation has been received, the message has been rejected or it cannot be confirmed due to channel failure
         /// </returns>
-        public Task Track()
+        public Task Track(CancellationToken token)
         {
+            if (token.IsCancellationRequested)
+                return Task.FromCanceled(token);
+
             var completionSource = new TaskCompletionSource<object>();
-            this.pending.AddOrUpdate(this.channel.GetNextSeqNo(), completionSource, (key, tcs) => new TaskCompletionSource<object>());
-            
-            return completionSource.Task;
+            var nextSeqNo = this.channel.GetNextSeqNo();
+            this.pending.AddOrUpdate(nextSeqNo, completionSource, (key, tcs) => new TaskCompletionSource<object>());
+
+            var ret = completionSource.Task;
+            if (!token.CanBeCanceled)
+                return ret;
+
+            var registration = token.Register(() =>
+            {
+                if (this.pending.TryRemove(nextSeqNo, out var tcs))
+                {
+                    tcs.TrySetCanceled(token);
+                }
+            }, useSynchronizationContext: false);
+            ret.ContinueWith(
+                _ => registration.Dispose(),
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+            return ret;
         }
 
         /// <summary>

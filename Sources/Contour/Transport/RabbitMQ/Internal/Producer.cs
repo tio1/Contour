@@ -123,7 +123,8 @@ namespace Contour.Transport.RabbitMQ.Internal
                     this.logger.Trace(m => m("Emitting message [{0}] through [{1}].", message.Label, nativeRoute));
                     Func<IBasicProperties, IDictionary<string, object>> propsVisitor = p => ExtractProperties(ref p, message.Headers);
 
-                    var confirmation = this.confirmationTracker.Track();
+                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var confirmation = this.confirmationTracker.Track(cts.Token);
                     this.Channel.Publish(nativeRoute, message, propsVisitor);
                     return confirmation;
                 }

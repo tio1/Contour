@@ -1,4 +1,6 @@
-﻿namespace Contour.Transport.RabbitMQ.Internal
+﻿using System.Threading;
+
+namespace Contour.Transport.RabbitMQ.Internal
 {
     using System;
     using System.Threading.Tasks;
@@ -44,7 +46,7 @@
         /// <returns>
         /// The <see cref="Task"/>.
         /// </returns>
-        Task Track();
+        Task Track(CancellationToken token);
 
         #endregion
     }
