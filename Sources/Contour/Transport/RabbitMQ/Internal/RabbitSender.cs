@@ -213,6 +213,10 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 var routeResolver = routeResolverBuilderFunc.Value(builder);
 
+                logger.Trace(m => m("Create producer for label [{0}] with confirm=[{1}] and timeout=[{2}]",
+                    this.Configuration.Label,
+                    this.Configuration.Options.IsConfirmationRequired(),
+                    this.Configuration.Options.ConfirmationTimeout));
                 var producer = new Producer(
                     this.bus.Endpoint,
                     connection,
