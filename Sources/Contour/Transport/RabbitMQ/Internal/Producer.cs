@@ -126,6 +126,9 @@ namespace Contour.Transport.RabbitMQ.Internal
                     var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                     var confirmation = this.confirmationTracker.Track(cts.Token);
                     this.Channel.Publish(nativeRoute, message, propsVisitor);
+                    confirmation.ContinueWith(
+                        task => cts.Dispose(),
+                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                     return confirmation;
                 }
                 finally
