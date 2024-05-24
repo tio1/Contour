@@ -57,6 +57,11 @@ namespace Contour.Sending
         public bool Delayed {  get; set; }
 
         /// <summary>
+        /// Время ожидания подтверждения получения сообщения, null если требуется бесконечное ожидание.
+        /// </summary>
+        public TimeSpan? ConfirmationTimeout { get; set; }
+
+        /// <summary>
         /// Создает новые настройки отправителя, которые наследуют существующие.
         /// </summary>
         /// <returns>Новые настройки отправителя, наследующие существующие настройки.</returns>

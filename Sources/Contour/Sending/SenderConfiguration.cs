@@ -159,6 +159,16 @@ namespace Contour.Sending
         }
 
         /// <summary>
+        /// Устанавливает время ожидания подтверждения получения сообщения.
+        /// </summary>
+        /// <returns>Конфигурация отправителя.</returns>
+        public ISenderConfigurator WithConfirmationTimeout(TimeSpan timeout)
+        {
+            this.Options.ConfirmationTimeout = timeout;
+            return this;
+        }
+
+        /// <summary>
         /// Устанавливает конечную точку обратного вызова по умолчанию для получения сообщений.
         /// </summary>
         /// <returns>Конфигурация отправителя.</returns>

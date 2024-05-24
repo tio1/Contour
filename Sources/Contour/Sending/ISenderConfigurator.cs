@@ -62,6 +62,12 @@ namespace Contour.Sending
         ISenderConfigurator WithConfirmation();
 
         /// <summary>
+        /// Устанавливает время ожидания подтверждения получения сообщения.
+        /// </summary>
+        /// <returns>Конфигурация отправителя.</returns>
+        ISenderConfigurator WithConfirmationTimeout(TimeSpan timeout);
+
+        /// <summary>
         /// Для получения ответного сообщения должна использоваться точка подписки, формируемая по умолчанию используемым провайдером.
         /// </summary>
         /// <returns>Конфигуратор отправителя.</returns>

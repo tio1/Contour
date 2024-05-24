@@ -44,7 +44,8 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <param name="confirmationIsRequired">
         /// Если <c>true</c> - тогда отправитель будет ожидать подтверждения о том, что сообщение было сохранено в брокере.
         /// </param>
-        public Producer(IEndpoint endpoint, IRabbitConnection connection, MessageLabel label, IRouteResolver routeResolver, bool confirmationIsRequired)
+        public Producer(IEndpoint endpoint, IRabbitConnection connection, MessageLabel label, IRouteResolver routeResolver,
+            bool confirmationIsRequired, TimeSpan? confirmationTimeout)
         {
             this.endpoint = endpoint;
 
@@ -53,6 +54,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             this.Label = label;
             this.RouteResolver = routeResolver;
             this.ConfirmationIsRequired = confirmationIsRequired;
+            this.ConfirmationTimeout = confirmationTimeout;
 
             this.logger = LogManager.GetLogger($"{this.GetType().FullName}({this.BrokerUrl}, {this.Label}, {this.GetHashCode()})");
         }
@@ -90,6 +92,8 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </summary>
         private bool ConfirmationIsRequired { get; }
 
+        public TimeSpan? ConfirmationTimeout { get; }
+
         /// <summary>
         /// Определитель маршрутов отправки и получения.
         /// </summary>
@@ -123,11 +127,13 @@ namespace Contour.Transport.RabbitMQ.Internal
                     this.logger.Trace(m => m("Emitting message [{0}] through [{1}].", message.Label, nativeRoute));
                     Func<IBasicProperties, IDictionary<string, object>> propsVisitor = p => ExtractProperties(ref p, message.Headers);
 
-                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                    var confirmation = this.confirmationTracker.Track(cts.Token);
+                    var cts = this.ConfirmationTimeout.HasValue 
+                        ? new CancellationTokenSource(this.ConfirmationTimeout.Value)
+                        : null;
+                    var confirmation = this.confirmationTracker.Track(cts?.Token ?? CancellationToken.None);
                     this.Channel.Publish(nativeRoute, message, propsVisitor);
                     confirmation.ContinueWith(
-                        task => cts.Dispose(),
+                        task => cts?.Dispose(),
                         CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                     return confirmation;
                 }
