@@ -23,6 +23,7 @@ namespace Contour.Transport.RabbitMQ.Internal
         private readonly IEndpoint endpoint;
         private readonly IRabbitConnection connection;
         private readonly ReaderWriterLockSlim slimLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        private readonly object publishLockObject = new object();
         private CancellationTokenSource cancellationTokenSource;
         private IPublishConfirmationTracker confirmationTracker = new DummyPublishConfirmationTracker();
 
@@ -127,15 +128,18 @@ namespace Contour.Transport.RabbitMQ.Internal
                     this.logger.Trace(m => m("Emitting message [{0}] through [{1}].", message.Label, nativeRoute));
                     Func<IBasicProperties, IDictionary<string, object>> propsVisitor = p => ExtractProperties(ref p, message.Headers);
 
-                    var cts = this.ConfirmationTimeout.HasValue 
-                        ? new CancellationTokenSource(this.ConfirmationTimeout.Value)
-                        : null;
-                    var confirmation = this.confirmationTracker.Track(cts?.Token ?? CancellationToken.None);
-                    this.Channel.Publish(nativeRoute, message, propsVisitor);
-                    confirmation.ContinueWith(
-                        task => cts?.Dispose(),
-                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-                    return confirmation;
+                    lock (this.publishLockObject)
+                    {
+                        var cts = this.ConfirmationTimeout.HasValue
+                            ? new CancellationTokenSource(this.ConfirmationTimeout.Value)
+                            : null;
+                        var confirmation = this.confirmationTracker.Track(cts?.Token ?? CancellationToken.None);
+                        this.Channel.Publish(nativeRoute, message, propsVisitor);
+                        confirmation.ContinueWith(
+                            task => cts?.Dispose(),
+                            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        return confirmation;
+                    }
                 }
                 finally
                 {
