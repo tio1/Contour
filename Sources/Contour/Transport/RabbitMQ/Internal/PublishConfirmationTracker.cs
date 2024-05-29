@@ -94,7 +94,9 @@ namespace Contour.Transport.RabbitMQ.Internal
         public Task Track(CancellationToken token)
         {
             if (token.IsCancellationRequested)
+            {
                 return Task.FromCanceled(token);
+            }
 
             var completionSource = new TaskCompletionSource<object>();
             var nextSeqNo = this.channel.GetNextSeqNo();
@@ -102,7 +104,9 @@ namespace Contour.Transport.RabbitMQ.Internal
 
             var ret = completionSource.Task;
             if (!token.CanBeCanceled)
+            {
                 return ret;
+            }
 
             var registration = token.Register(() =>
             {
