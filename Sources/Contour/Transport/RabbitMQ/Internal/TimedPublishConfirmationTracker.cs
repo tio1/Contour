@@ -79,14 +79,17 @@ namespace Contour.Transport.RabbitMQ.Internal
                         return tcs;
                     });
 
+                logger.Trace(m => m("Start tracking confirmation for [{0}]", nextSequenceNumber));
                 var token = cts.Token;
                 using (_ = token.Register(() =>
                        {
+                           logger.Trace(m => m("Try cancel task for [{0}]", nextSequenceNumber));
                            completionSource.TrySetCanceled(token);
                            this.pending.TryRemove(nextSequenceNumber, out _);
                        }, useSynchronizationContext: false))
                     {
                         await completionSource.Task;
+                        logger.Trace(m => m("End tracking confirmation for [{0}]", nextSequenceNumber));
                     }
             }
         }
@@ -102,14 +105,17 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </param>
         private void ProcessConfirmation(ulong sequenceNumber, bool confirmed)
         {
+            logger.Trace(m => m("Try to end waiting task for [{0}]", sequenceNumber));
             if (this.pending.TryRemove(sequenceNumber, out var completionSource))
             {
                 if (confirmed)
                 {
+                    logger.Trace(m => m("Try to set result for waiting task for [{0}]", sequenceNumber));
                     completionSource.TrySetResult(null);
                 }
                 else
                 {
+                    logger.Trace(m => m("Try to throw exception for waiting task for [{0}]", sequenceNumber));
                     completionSource.TrySetException(new MessageRejectedException());
                 }
             }
@@ -117,11 +123,13 @@ namespace Contour.Transport.RabbitMQ.Internal
 
         private void Reset()
         {
+            logger.Trace("Start resetting tracker");
             if (this.pending == null)
             {
                 return;
             }
 
+            logger.Trace("Start clearing pending");
             this.pending.ForEach(kvp =>
             {
                 this.logger.Trace($"A broker publish confirmation for message with sequence number [{kvp.Key}] has not been received");
