@@ -1,5 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace Contour.Transport.RabbitMQ.Internal
 {
@@ -34,11 +33,9 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <returns>
         /// The <see cref="Task"/>.
         /// </returns>
-        public Task Track(CancellationToken token)
+        public Task Track(ulong nextSequenceNumber)
         {
-            var completionSource = new TaskCompletionSource<object>();
-            completionSource.SetResult(null);
-            return completionSource.Task;
+            return Task.CompletedTask;
         }
     }
 }

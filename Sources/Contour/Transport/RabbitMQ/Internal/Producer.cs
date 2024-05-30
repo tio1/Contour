@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,6 +43,7 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <param name="confirmationIsRequired">
         /// Если <c>true</c> - тогда отправитель будет ожидать подтверждения о том, что сообщение было сохранено в брокере.
         /// </param>
+        /// <param name="confirmationTimeout">Timeout to receive confirmation from broker</param>
         public Producer(IEndpoint endpoint, IRabbitConnection connection, MessageLabel label, IRouteResolver routeResolver,
             bool confirmationIsRequired, TimeSpan? confirmationTimeout)
         {
@@ -130,14 +129,9 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                     lock (this.publishLockObject)
                     {
-                        var cts = this.ConfirmationTimeout.HasValue
-                            ? new CancellationTokenSource(this.ConfirmationTimeout.Value)
-                            : null;
-                        var confirmation = this.confirmationTracker.Track(cts?.Token ?? CancellationToken.None);
+                        var nextSequenceNumber = this.Channel.GetNextSeqNo();
+                        var confirmation = this.confirmationTracker.Track(nextSequenceNumber);
                         this.Channel.Publish(nativeRoute, message, propsVisitor);
-                        confirmation.ContinueWith(
-                            task => cts?.Dispose(),
-                            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                         return confirmation;
                     }
                 }
@@ -222,9 +216,15 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 if (this.ConfirmationIsRequired)
                 {
-                    this.confirmationTracker = new PublishConfirmationTracker(this.Channel);
+                    this.confirmationTracker = this.ConfirmationTimeout.HasValue
+                        ? new TimedPublishConfirmationTracker(this.ConfirmationTimeout.Value)
+                        : (IPublishConfirmationTracker)new PublishConfirmationTracker();
                     this.Channel.EnablePublishConfirmation();
                     this.Channel.OnConfirmation(this.confirmationTracker.HandleConfirmation);
+                }
+                else
+                {
+                    this.confirmationTracker = new DummyPublishConfirmationTracker();
                 }
 
                 this.CallbackListener?.StartConsuming();

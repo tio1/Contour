@@ -1,25 +1,31 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Common.Logging;
 using Contour.Helpers;
 using Contour.Sending;
+using RabbitMQ.Client;
 
 namespace Contour.Transport.RabbitMQ.Internal
 {
     /// <summary>
     /// A publish confirmation tracker
     /// </summary>
-    internal sealed class PublishConfirmationTracker : IPublishConfirmationTracker
+    internal sealed class TimedPublishConfirmationTracker : IPublishConfirmationTracker
     {
         private readonly ILog logger; 
         private readonly ConcurrentDictionary<ulong, TaskCompletionSource<object>> pending = new ConcurrentDictionary<ulong, TaskCompletionSource<object>>();
+        private readonly TimeSpan confirmationTimeout;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PublishConfirmationTracker"/> class. 
         /// </summary>
-        public PublishConfirmationTracker()
+        /// <param name="confirmationTimeout"></param>
+        public TimedPublishConfirmationTracker(TimeSpan confirmationTimeout)
         {
+            this.confirmationTimeout = confirmationTimeout;
             this.logger = LogManager.GetLogger($"{this.GetType().FullName}({this.GetHashCode()})");
         }
         
@@ -61,17 +67,28 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <returns>
         /// The <see cref="Task"/> which can be used to check if confirmation has been received, the message has been rejected or it cannot be confirmed due to channel failure
         /// </returns>
-        public Task Track(ulong nextSequenceNumber)
+        public async Task Track(ulong nextSequenceNumber)
         {
-            var completionSource = new TaskCompletionSource<object>();
-            this.pending.AddOrUpdate(nextSequenceNumber, completionSource,
-                (key, tcs) =>
-                {
-                    logger.Error($"Already existed TaskCompletionSource for [{key}]");
-                    return tcs;
-                });
+            using (var cts = new CancellationTokenSource(this.confirmationTimeout))
+            {
+                var completionSource = new TaskCompletionSource<object>();
+                this.pending.AddOrUpdate(nextSequenceNumber, completionSource,
+                    (key, tcs) =>
+                    {
+                        logger.Error($"Already existed TaskCompletionSource for [{key}]");
+                        return tcs;
+                    });
 
-            return completionSource.Task;
+                var token = cts.Token;
+                using (_ = token.Register(() =>
+                       {
+                           completionSource.TrySetCanceled(token);
+                           this.pending.TryRemove(nextSequenceNumber, out _);
+                       }, useSynchronizationContext: false))
+                    {
+                        await completionSource.Task;
+                    }
+            }
         }
 
         /// <summary>
