@@ -84,8 +84,9 @@ namespace Contour.Transport.RabbitMQ.Internal
                 using (_ = token.Register(() =>
                        {
                            logger.Trace(m => m("Try cancel task for [{0}]", nextSequenceNumber));
-                           completionSource.TrySetCanceled(token);
+                           completionSource.TrySetException(new UnconfirmedMessageException());
                            this.pending.TryRemove(nextSequenceNumber, out _);
+                           this.logger.Trace($"A broker publish confirmation for message with sequence number [{nextSequenceNumber}] has not been received");
                        }, useSynchronizationContext: false))
                     {
                         await completionSource.Task;
