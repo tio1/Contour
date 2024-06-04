@@ -290,7 +290,12 @@ namespace Contour.Sending
             var exchange = new MessageExchange(message, null);
             var invoker = new MessageExchangeFilterInvoker(this.filters);
 
-            return invoker.Process(exchange, connectionKey);
+            return invoker.Process(exchange, connectionKey)
+                .ContinueWith(
+                    t =>
+                    {
+                        t.Result.ThrowIfFailed();
+                    });
         }
 
         /// <summary>
