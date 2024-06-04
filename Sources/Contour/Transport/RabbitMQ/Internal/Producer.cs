@@ -130,11 +130,8 @@ namespace Contour.Transport.RabbitMQ.Internal
                     lock (this.publishLockObject)
                     {
                         var nextSequenceNumber = this.Channel.GetNextSeqNo();
-                        logger.Trace(m => m("Before track [{0}]", nextSequenceNumber));
                         var confirmation = this.confirmationTracker.Track(nextSequenceNumber);
-                        logger.Trace(m => m("Track [{0}]", nextSequenceNumber));
                         this.Channel.Publish(nativeRoute, message, propsVisitor);
-                        logger.Trace(m => m("After publish [{0}]", nextSequenceNumber));
                         return confirmation;
                     }
                 }
