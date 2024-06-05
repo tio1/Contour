@@ -83,7 +83,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             var completionSource = new TaskCompletionSource<object>();
             if (!this.pending.TryAdd(nextSequenceNumber, completionSource))
             {
-                throw new AlreadyTrackedException { SequenceNumber = nextSequenceNumber };
+                throw new AlreadyTrackedException(nextSequenceNumber);
             }
 
             return this.trackImpl(completionSource, nextSequenceNumber);
