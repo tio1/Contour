@@ -23,7 +23,7 @@ namespace Contour.Transport.RabbitMQ.Internal
         private readonly ReaderWriterLockSlim slimLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private readonly object publishLockObject = new object();
         private CancellationTokenSource cancellationTokenSource;
-        private IPublishConfirmationTracker confirmationTracker = new DummyPublishConfirmationTracker();
+        private IPublishConfirmationTracker confirmationTracker;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Producer"/> class. 
