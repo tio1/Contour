@@ -216,9 +216,7 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 if (this.ConfirmationIsRequired)
                 {
-                    this.confirmationTracker = this.ConfirmationTimeout.HasValue
-                        ? new TimedPublishConfirmationTracker(this.ConfirmationTimeout.Value)
-                        : (IPublishConfirmationTracker)new PublishConfirmationTracker();
+                    this.confirmationTracker = new PublishConfirmationTracker(this.ConfirmationTimeout);
                     this.Channel.EnablePublishConfirmation();
                     this.Channel.OnConfirmation(this.confirmationTracker.HandleConfirmation);
                 }
