@@ -208,6 +208,11 @@ namespace Contour.Configurator
                 if (outgoingElement.Confirm)
                 {
                     configurator.WithConfirmation();
+
+                    if (outgoingElement.ConfirmTimeout.HasValue)
+                    {
+                        configurator.WithConfirmationTimeout(outgoingElement.ConfirmTimeout.Value);
+                    }
                 }
 
                 if (outgoingElement.Persist)

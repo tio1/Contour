@@ -94,6 +94,12 @@ namespace Contour.Configurator
         [ConfigurationProperty("delayed", DefaultValue = false)]
         public bool Delayed => (bool)base["delayed"];
 
+        /// <summary>
+        /// Gets confirmation timeout on publishing.
+        /// </summary>
+        [ConfigurationProperty("confirmTimeout")]
+        public TimeSpan? ConfirmTimeout => (TimeSpan?)base["confirmTimeout"];
+
         ICallbackEndpoint IOutgoing.CallbackEndpoint => this.CallbackEndpoint;
     }
 }

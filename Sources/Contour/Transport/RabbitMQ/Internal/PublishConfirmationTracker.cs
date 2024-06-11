@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Common.Logging;
 using Contour.Helpers;
 using Contour.Sending;
-using RabbitMQ.Client;
 
 namespace Contour.Transport.RabbitMQ.Internal
 {
@@ -15,32 +15,34 @@ namespace Contour.Transport.RabbitMQ.Internal
     internal sealed class PublishConfirmationTracker : IPublishConfirmationTracker
     {
         private readonly ILog logger; 
-        private readonly RabbitChannel channel;
         private readonly ConcurrentDictionary<ulong, TaskCompletionSource<object>> pending = new ConcurrentDictionary<ulong, TaskCompletionSource<object>>();
+        private readonly TimeSpan? confirmationTimeout;
+        private readonly Func<TaskCompletionSource<object>, ulong, Task> trackImpl;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PublishConfirmationTracker"/> class. 
         /// </summary>
-        /// <param name="channel">
-        /// The channel.
-        /// </param>
-        public PublishConfirmationTracker(RabbitChannel channel)
+        /// <param name="confirmationTimeout"></param>
+        public PublishConfirmationTracker(TimeSpan? confirmationTimeout)
         {
+            this.confirmationTimeout = confirmationTimeout;
             this.logger = LogManager.GetLogger($"{this.GetType().FullName}({this.GetHashCode()})");
-            this.channel = channel;
-            this.channel.Shutdown += this.OnChannelShutdown;
+            this.trackImpl = this.confirmationTimeout.HasValue 
+                ? (Func<TaskCompletionSource<object>, ulong, Task>)TrackWithTimeout 
+                : TrackInfinite;
         }
         
         public void Dispose()
         {
-            // Do not dispose the channel as its' lifetime is controlled by the producer owning this confirmation tracker
-
-            if (this.channel != null)
+            while (this.pending.Keys.Count > 0)
             {
-                this.channel.Shutdown -= this.OnChannelShutdown;
+                var sequenceNumber = this.pending.Keys.First();
+                if (this.pending.TryRemove(sequenceNumber, out var tcs))
+                {
+                    this.logger.Trace(m => m($"A broker publish confirmation for message with sequence number [{sequenceNumber}] has not been received"));
+                    tcs.TrySetException(new UnconfirmedMessageException { SequenceNumber = sequenceNumber });
+                }
             }
-
-            this.Reset();
         }
 
         /// <summary>
@@ -71,31 +73,46 @@ namespace Contour.Transport.RabbitMQ.Internal
         }
 
         /// <summary>
-        /// Removes all registered confirmations and rejects all pending messages
-        /// </summary>
-        public void Reset()
-        {
-            if (this.pending == null)
-            {
-                return;
-            }
-
-            this.pending.Values.ForEach(v => v.TrySetException(new MessageRejectedException()));
-            this.pending.Clear();
-        }
-
-        /// <summary>
-        /// Registers a new message publishing confirmation using current channel publish sequence number
+        /// Registers a new message publishing confirmation using next sequence number.
         /// </summary>
         /// <returns>
         /// The <see cref="Task"/> which can be used to check if confirmation has been received, the message has been rejected or it cannot be confirmed due to channel failure
         /// </returns>
-        public Task Track()
+        public Task Track(ulong nextSequenceNumber)
         {
             var completionSource = new TaskCompletionSource<object>();
-            this.pending.AddOrUpdate(this.channel.GetNextSeqNo(), completionSource, (key, tcs) => new TaskCompletionSource<object>());
-            
+            if (!this.pending.TryAdd(nextSequenceNumber, completionSource))
+            {
+                throw new AlreadyTrackedException(nextSequenceNumber);
+            }
+
+            return this.trackImpl(completionSource, nextSequenceNumber);
+        }
+
+        private Task TrackInfinite(TaskCompletionSource<object> completionSource, ulong nextSequenceNumber)
+        {
             return completionSource.Task;
+        }
+
+        private async Task TrackWithTimeout(TaskCompletionSource<object> completionSource, ulong nextSequenceNumber)
+        {
+            using (var cts = new CancellationTokenSource(this.confirmationTimeout.Value))
+            {
+                var token = cts.Token;
+                using (_ = token.Register(() => CancelPending(nextSequenceNumber), useSynchronizationContext: false))
+                {
+                    await completionSource.Task.ConfigureAwait(false);
+                }
+            }
+        }
+
+        private void CancelPending(ulong nextSequenceNumber)
+        {
+            this.logger.Trace($"Wait for publish confirmation for message with sequence number [{nextSequenceNumber}] is timed out");
+            if (this.pending.TryRemove(nextSequenceNumber, out var completionSource))
+            {
+                completionSource.TrySetException(new UnconfirmedMessageException { SequenceNumber = nextSequenceNumber });
+            }
         }
 
         /// <summary>
@@ -109,37 +126,15 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </param>
         private void ProcessConfirmation(ulong sequenceNumber, bool confirmed)
         {
-            TaskCompletionSource<object> completionSource;
-            if (this.pending.TryGetValue(sequenceNumber, out completionSource))
+            if (this.pending.TryRemove(sequenceNumber, out var completionSource))
             {
-                TaskCompletionSource<object> tcs;
-                
-                if (this.pending.TryRemove(sequenceNumber, out tcs))
+                if (confirmed)
                 {
-                    if (confirmed)
-                    {
-                        completionSource.TrySetResult(null);
-                    }
-                    else
-                    {
-                        completionSource.TrySetException(new MessageRejectedException());
-                    }
+                    completionSource.TrySetResult(null);
                 }
-            }
-        }
-
-        private void OnChannelShutdown(IChannel sender, ShutdownEventArgs args)
-        {
-            this.logger.Trace(m => m($"Message confirmation channel in connection [{this.channel.ConnectionId}] has been shut down, abandoning pending publish confirmations"));
-
-            while (this.pending.Keys.Count > 0)
-            {
-                TaskCompletionSource<object> tcs;
-                var sequenceNumber = this.pending.Keys.First();
-                if (this.pending.TryRemove(sequenceNumber, out tcs))
+                else
                 {
-                    this.logger.Trace(m => m($"A broker publish confirmation for message with sequence number [{sequenceNumber}] has not been received"));
-                    tcs.TrySetException(new UnconfirmedMessageException() { SequenceNumber = sequenceNumber });
+                    completionSource.TrySetException(new MessageRejectedException());
                 }
             }
         }

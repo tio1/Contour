@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,8 +21,9 @@ namespace Contour.Transport.RabbitMQ.Internal
         private readonly IEndpoint endpoint;
         private readonly IRabbitConnection connection;
         private readonly ReaderWriterLockSlim slimLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        private readonly object publishLockObject = new object();
         private CancellationTokenSource cancellationTokenSource;
-        private IPublishConfirmationTracker confirmationTracker = new DummyPublishConfirmationTracker();
+        private IPublishConfirmationTracker confirmationTracker;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Producer"/> class. 
@@ -44,7 +43,9 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <param name="confirmationIsRequired">
         /// Если <c>true</c> - тогда отправитель будет ожидать подтверждения о том, что сообщение было сохранено в брокере.
         /// </param>
-        public Producer(IEndpoint endpoint, IRabbitConnection connection, MessageLabel label, IRouteResolver routeResolver, bool confirmationIsRequired)
+        /// <param name="confirmationTimeout">Timeout to receive confirmation from broker</param>
+        public Producer(IEndpoint endpoint, IRabbitConnection connection, MessageLabel label, IRouteResolver routeResolver,
+            bool confirmationIsRequired, TimeSpan? confirmationTimeout)
         {
             this.endpoint = endpoint;
 
@@ -53,6 +54,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             this.Label = label;
             this.RouteResolver = routeResolver;
             this.ConfirmationIsRequired = confirmationIsRequired;
+            this.ConfirmationTimeout = confirmationTimeout;
 
             this.logger = LogManager.GetLogger($"{this.GetType().FullName}({this.BrokerUrl}, {this.Label}, {this.GetHashCode()})");
         }
@@ -90,6 +92,8 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </summary>
         private bool ConfirmationIsRequired { get; }
 
+        public TimeSpan? ConfirmationTimeout { get; }
+
         /// <summary>
         /// Определитель маршрутов отправки и получения.
         /// </summary>
@@ -123,9 +127,13 @@ namespace Contour.Transport.RabbitMQ.Internal
                     this.logger.Trace(m => m("Emitting message [{0}] through [{1}].", message.Label, nativeRoute));
                     Func<IBasicProperties, IDictionary<string, object>> propsVisitor = p => ExtractProperties(ref p, message.Headers);
 
-                    var confirmation = this.confirmationTracker.Track();
-                    this.Channel.Publish(nativeRoute, message, propsVisitor);
-                    return confirmation;
+                    lock (this.publishLockObject)
+                    {
+                        var nextSequenceNumber = this.Channel.GetNextSeqNo();
+                        var confirmation = this.confirmationTracker.Track(nextSequenceNumber);
+                        this.Channel.Publish(nativeRoute, message, propsVisitor);
+                        return confirmation;
+                    }
                 }
                 finally
                 {
@@ -208,9 +216,13 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 if (this.ConfirmationIsRequired)
                 {
-                    this.confirmationTracker = new PublishConfirmationTracker(this.Channel);
+                    this.confirmationTracker = new PublishConfirmationTracker(this.ConfirmationTimeout);
                     this.Channel.EnablePublishConfirmation();
                     this.Channel.OnConfirmation(this.confirmationTracker.HandleConfirmation);
+                }
+                else
+                {
+                    this.confirmationTracker = new DummyPublishConfirmationTracker();
                 }
 
                 this.CallbackListener?.StartConsuming();

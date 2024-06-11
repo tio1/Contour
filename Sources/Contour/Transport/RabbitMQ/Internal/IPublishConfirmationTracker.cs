@@ -1,8 +1,8 @@
-﻿namespace Contour.Transport.RabbitMQ.Internal
-{
-    using System;
-    using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 
+namespace Contour.Transport.RabbitMQ.Internal
+{
     /// <summary>
     /// The confirmation handler.
     /// </summary>
@@ -22,8 +22,6 @@
     /// </summary>
     internal interface IPublishConfirmationTracker : IDisposable
     {
-        #region Public Methods and Operators
-
         /// <summary>
         /// The handle confirmation.
         /// </summary>
@@ -44,8 +42,6 @@
         /// <returns>
         /// The <see cref="Task"/>.
         /// </returns>
-        Task Track();
-
-        #endregion
+        Task Track(ulong nextSequenceNumber);
     }
 }
