@@ -29,6 +29,12 @@ namespace Contour.Sending
         ISenderConfigurator Persistently();
 
         /// <summary>
+        /// Сообщения будут доставляться с задержкой
+        /// </summary>
+        /// <returns>Sender configurator.</returns>
+        ISenderConfiguration Delayed();
+
+        /// <summary>
         /// Устанавливает псевдоним метки отправляемого сообщения.
         /// </summary>
         /// <param name="alias">Псевдоним метки отправляемого сообщения.</param>
@@ -54,6 +60,12 @@ namespace Contour.Sending
         /// </summary>
         /// <returns>Конфигуратор отправителя.</returns>
         ISenderConfigurator WithConfirmation();
+
+        /// <summary>
+        /// Устанавливает время ожидания подтверждения получения сообщения.
+        /// </summary>
+        /// <returns>Конфигурация отправителя.</returns>
+        ISenderConfigurator WithConfirmationTimeout(TimeSpan timeout);
 
         /// <summary>
         /// Для получения ответного сообщения должна использоваться точка подписки, формируемая по умолчанию используемым провайдером.

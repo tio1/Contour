@@ -16,6 +16,9 @@ namespace Contour.Transport.RabbitMQ.Topology
     /// </summary>
     public class ExchangeBuilder
     {
+        public const string DelayedExchangeType = "x-delayed-message";
+        public const string DelayedExchangeSubtypeArgumentName = "x-delayed-type";
+        
         #region Constructors and Destructors
 
         /// <summary>
@@ -93,6 +96,36 @@ namespace Contour.Transport.RabbitMQ.Topology
             }
         }
 
+        public ExchangeBuilder DelayedDirect
+        {
+            get
+            {
+                this.Instance.Type = DelayedExchangeType;
+                this.Instance.Arguments[DelayedExchangeSubtypeArgumentName] = ExchangeType.Direct;
+                return this;
+            }
+        }
+
+        public ExchangeBuilder DelayedFanout
+        {
+            get
+            {
+                this.Instance.Type = DelayedExchangeType;
+                this.Instance.Arguments[DelayedExchangeSubtypeArgumentName] = ExchangeType.Fanout;
+                return this;
+            }
+        }
+
+        public ExchangeBuilder DelayedTopic
+        {
+            get
+            {
+                this.Instance.Type = DelayedExchangeType;
+                this.Instance.Arguments[DelayedExchangeSubtypeArgumentName] = ExchangeType.Topic;
+                return this;
+            }
+        }
+        
         #endregion
 
         #region Properties

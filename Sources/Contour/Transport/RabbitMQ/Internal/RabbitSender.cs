@@ -218,7 +218,8 @@ namespace Contour.Transport.RabbitMQ.Internal
                     connection,
                     this.Configuration.Label,
                     routeResolver,
-                    this.Configuration.Options.IsConfirmationRequired());
+                    this.Configuration.Options.IsConfirmationRequired(),
+                    this.Configuration.Options.ConfirmationTimeout);
 
                 if (this.Configuration.RequiresCallback)
                 {

@@ -23,5 +23,7 @@
         int? QueueLimit { get; }
 
         int? QueueMaxLengthBytes { get; }
+
+        bool Delayed { get; }
     }
 }

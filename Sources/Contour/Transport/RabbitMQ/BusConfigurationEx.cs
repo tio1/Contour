@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using Contour.Configuration;
@@ -59,10 +59,17 @@ namespace Contour.Transport.RabbitMQ
                                          Headers.Timeout,
                                          Headers.Ttl,
                                          Headers.QueueMaxLength,
-                                         Headers.QueueMaxLengthBytes
+                                         Headers.QueueMaxLengthBytes,
+                                         Headers.Delay
                                      };
             var messageHeaderStorage = new MessageHeaderStorage(blockedHeaders);
             c.UseIncomingMessageHeaderStorage(messageHeaderStorage);
+
+            if (Headers.GlobalStorage == null)
+            {
+                // hack to give access to headers if needed
+                Headers.GlobalStorage = messageHeaderStorage;
+            }
 
             c.SenderDefaults = new RabbitSenderOptions(c.EndpointOptions)
             {

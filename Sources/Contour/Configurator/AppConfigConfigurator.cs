@@ -208,6 +208,11 @@ namespace Contour.Configurator
                 if (outgoingElement.Confirm)
                 {
                     configurator.WithConfirmation();
+
+                    if (outgoingElement.ConfirmTimeout.HasValue)
+                    {
+                        configurator.WithConfirmationTimeout(outgoingElement.ConfirmTimeout.Value);
+                    }
                 }
 
                 if (outgoingElement.Persist)
@@ -228,6 +233,11 @@ namespace Contour.Configurator
                 if (outgoingElement.Timeout.HasValue)
                 {
                     configurator.WithRequestTimeout(outgoingElement.Timeout);
+                }
+
+                if (outgoingElement.Delayed)
+                {
+                    configurator.Delayed();
                 }
 
                 // Connection string
@@ -324,6 +334,12 @@ namespace Contour.Configurator
                 if (incomingElement.RequiresAccept)
                 {
                     configurator.RequiresAccept();
+                }
+
+                // Delayed
+                if (incomingElement.Delayed)
+                {
+                    configurator.Delayed();
                 }
 
                 // Connection string

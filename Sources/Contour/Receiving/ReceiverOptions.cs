@@ -74,6 +74,8 @@ namespace Contour.Receiving
         /// </summary>
         public Maybe<IUnhandledDeliveryStrategy> UnhandledDeliveryStrategy { protected get; set; }
 
+        public bool Delayed { get; set; }
+
         /// <summary>
         /// Создает новый экземпляр настроек как копию существующего.
         /// </summary>
@@ -183,6 +185,5 @@ namespace Contour.Receiving
         {
             return this.Pick<ReceiverOptions, int>((o) => o.QueueMaxLengthBytes);
         }
-
     }
 }

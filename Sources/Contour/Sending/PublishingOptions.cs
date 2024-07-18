@@ -33,6 +33,11 @@ namespace Contour.Sending
         public Maybe<TimeSpan?> Ttl { get; set; }
 
         /// <summary>
+        /// Gets or sets the ttl.
+        /// </summary>
+        public TimeSpan? Delay { get; set; }
+        
+        /// <summary>
         /// Дополнительные заголовки
         /// </summary>
         public Dictionary<string, object> AdditionalHeaders { get; set; }

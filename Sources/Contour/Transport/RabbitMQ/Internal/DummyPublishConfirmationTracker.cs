@@ -33,11 +33,9 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// <returns>
         /// The <see cref="Task"/>.
         /// </returns>
-        public Task Track()
+        public Task Track(ulong nextSequenceNumber)
         {
-            var completionSource = new TaskCompletionSource<object>();
-            completionSource.SetResult(null);
-            return completionSource.Task;
+            return Task.CompletedTask;
         }
     }
 }

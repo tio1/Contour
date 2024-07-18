@@ -95,6 +95,12 @@ namespace Contour.Sending
             return this;
         }
 
+        public ISenderConfiguration Delayed()
+        {
+            this.Options.Delayed = true;
+            return this;
+        }
+
         /// <summary>
         /// Проверяет корректность конфигурации.
         /// </summary>
@@ -149,6 +155,16 @@ namespace Contour.Sending
         {
             this.Options.ConfirmationIsRequired = true;
 
+            return this;
+        }
+
+        /// <summary>
+        /// Устанавливает время ожидания подтверждения получения сообщения.
+        /// </summary>
+        /// <returns>Конфигурация отправителя.</returns>
+        public ISenderConfigurator WithConfirmationTimeout(TimeSpan timeout)
+        {
+            this.Options.ConfirmationTimeout = timeout;
             return this;
         }
 

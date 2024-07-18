@@ -17,5 +17,9 @@ namespace Contour.Configurator.Configuration
         string ConnectionString { get; }
 
         bool? ReuseConnection { get; }
+
+        bool Delayed { get; }
+
+        TimeSpan? ConfirmTimeout { get; }
     }
 }
