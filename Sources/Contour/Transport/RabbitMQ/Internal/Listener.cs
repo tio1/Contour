@@ -473,9 +473,10 @@ namespace Contour.Transport.RabbitMQ.Internal
                         return;
                     }
 
-                    // WaitHandle provide synchronous waiting, so following code use Task.Delay to free the thread
+                    // IsReady use WaitHandle(0) under the hood.
+                    // WaitHandle provide synchronous waiting and we want async, so using Task.Delay to free the thread
                     // Need to refactor WhenReady mechanism to be truly async
-                    busReady = this.busContext.WhenReady.WaitOne(0);
+                    busReady = this.busContext.IsReady;
                     if (!busReady)
                     {
                         var waitMs = random.Next(200, 2000);
