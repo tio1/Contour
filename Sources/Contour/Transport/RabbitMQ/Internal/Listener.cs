@@ -1,4 +1,4 @@
-﻿using Contour.Transport.RabbitMQ.Topology;
+using Contour.Transport.RabbitMQ.Topology;
 using RabbitMQ.Client;
 
 namespace Contour.Transport.RabbitMQ.Internal
@@ -223,7 +223,7 @@ namespace Contour.Transport.RabbitMQ.Internal
 
             if (consumer is IAsyncConsumerOf<T>)
             {
-                
+
                 consumingAction = delivery =>
                     {
                         IConsumingContext<T> context = delivery.BuildConsumingContext<T>(label);
@@ -237,7 +237,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                         {
                             this.validatorRegistry.Validate(context.Message);
                         }
-                        
+
                         return ((IAsyncConsumerOf<T>)consumer).HandleAsync(context);
                     };
             }
@@ -247,7 +247,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     {
                         IConsumingContext<T> context = delivery.BuildConsumingContext<T>(label);
 
-                        if (validator != null) 
+                        if (validator != null)
                         {
                             validator.Validate(context.Message)
                                 .ThrowIfBroken();
@@ -291,15 +291,9 @@ namespace Contour.Transport.RabbitMQ.Internal
                 var count = (int)this.ReceiverOptions.GetParallelismLevel().Value;
                 var token = this.cancellationTokenSource.Token;
 
-                // In order to increase the performance of the listener on startup the task factory should be configured to create long running tasks. These tasks will run on dedicated threads instead of thread pool threads which may be created with delays in certain conditions. As a workaround for this condition one can set the minimum number of threads created by the pool before switching the thread creation policy. See https://stackoverflow.com/questions/22036365/newly-created-threads-using-task-factory-startnew-starts-very-slowly for details.
-
                 this.workers = new ConcurrentBag<Task>(Enumerable
                     .Range(0, count)
-                    .Select(async 
-                        _ => await 
-                            Task.Factory.StartNew(async 
-                                () => await this.ConsumerTaskMethod(token), token, TaskCreationOptions.LongRunning,
-                                TaskScheduler.Default)));
+                    .Select(async _ => await ConsumerFactoryMethod(token).ConfigureAwait(false)));
 
                 this.isConsuming = true;
                 this.logger.Trace("Listener's workers started successfully");
@@ -361,7 +355,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             var stopwatch = Stopwatch.StartNew();
 
             try
-            {   
+            {
                 // тут не происходит ничего, что можно было бы сделать асинхронно
                 var processed = this.TryHandleAsResponse(delivery);
 
@@ -455,35 +449,54 @@ namespace Contour.Transport.RabbitMQ.Internal
         }
 
         /// <summary>
-        /// Обрабатывает сообщение.
+        /// Создаёт потребителя сообщений.
         /// </summary>
         /// <param name="token">
         /// Сигнальный объект аварийного досрочного завершения обработки.
         /// </param>
-        private async Task ConsumerTaskMethod(CancellationToken token)
+        private async Task ConsumerFactoryMethod(CancellationToken token)
         {
             try
             {
                 var consumer = this.InitializeConsumer(token, out var channel);
 
-                var waitSecond = 0;
+                var random = new Random(); // todo: use Random.Shared after migration to Net8
+                var totalWaitTimeMs = 0;
+                const int WaitTimeBeforeLogMessage = 60_000;
+                var timesLogged = 0;
+                var busReady = false;
                 // если шина так и не стала готова работать, то не смысла начинать слушать сообщения, что бы потом их потерять
-                while (true)
+                while (!busReady)
                 {
                     if (token.IsCancellationRequested)
                     {
                         return;
                     }
-                    
-                    if (!this.busContext.WhenReady.WaitOne(60000))
+
+                    // WaitHandle provide synchronous waiting, so following code use Task.Delay to free the thread
+                    // Need to refactor WhenReady mechanism to be truly async
+                    busReady = this.busContext.WhenReady.WaitOne(0);
+                    if (!busReady)
                     {
-                        waitSecond += 60;
-                        this.logger.Warn(m => m ("Wait when bus [{0}] will be ready already {1} seconds. Continue waiting.", this.busContext.Endpoint.Address, waitSecond));
+                        var waitMs = random.Next(200, 2000);
+                        await Task.Delay(waitMs, token);
+
+                        totalWaitTimeMs += waitMs;
+                        if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
+                        {
+                            timesLogged++;
+                            this.logger.Warn(m => m(
+                                "Waiting when bus [{0}] will be ready took {1} seconds already. Continue waiting.",
+                                this.busContext.Endpoint.Address,
+                                totalWaitTimeMs / 1000));
+                        }
+
                     }
-                    else
-                    {
-                        break;
-                    }
+                }
+
+                if (token.IsCancellationRequested)
+                {
+                    return;
                 }
 
                 this.StartConsuming(consumer, channel, token);
@@ -550,7 +563,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                 RabbitDelivery delivery = null;
                 try
                 {
-                    delivery = this.BuildDeliveryFrom(channel, args);
+                    delivery = BuildDeliveryFrom(channel, args);
                 }
                 catch (Exception e)
                 {
@@ -560,11 +573,11 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 try
                 {
-                    await this.Deliver(delivery);
+                    await Deliver(delivery).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
-                    this.OnFailure(delivery, e);
+                    OnFailure(delivery, e);
                 }
             }
 
@@ -587,7 +600,7 @@ namespace Contour.Transport.RabbitMQ.Internal
 
             tag = channel.StartConsuming(
                 this.endpoint.ListeningSource,
-                this.ReceiverOptions.IsAcceptRequired(),
+                ReceiverOptions.IsAcceptRequired(),
                 consumer);
 
             this.logger.Trace(
@@ -717,7 +730,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             if (consumingAction != null)
             {
                 this.messageHeaderStorage.Store(delivery.Headers);
-                await consumingAction(delivery);
+                await consumingAction(delivery).ConfigureAwait(false);
                 return true;
             }
 
