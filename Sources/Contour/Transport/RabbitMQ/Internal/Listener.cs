@@ -570,13 +570,13 @@ namespace Contour.Transport.RabbitMQ.Internal
             this.logger.Trace(
                 $"A consumer tagged [{tag}] has been registered in listener of [{string.Join(",", this.AcceptedLabels)}]");
 
-            this.logger.Debug($"Listener {this} start consuming.");
+            this.logger.Debug($"Listener start consuming.");
 
             async Task HandleMessage(object _, BasicDeliverEventArgs args)
             {
                 if (token.IsCancellationRequested)
                 {
-                    this.logger.Warn(x => x("Token was cancelled, but Listener [{0}] still receive messages.", this));
+                    this.logger.WarnFormat("Token was cancelled, but Listener still receive messages. Routing key [{0}], exchange [{1}].", args.RoutingKey, args.Exchange);
                     return;
                 }
 
@@ -641,7 +641,17 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </param>
         private void OnFailure(RabbitDelivery delivery, Exception exception)
         {
-            this.logger.Warn(m => m("Failed to process message labeled [{0}] on queue [{1}].", delivery.Label, this.endpoint.ListeningSource), exception);
+            string label = string.Empty;
+            if (delivery.IsResponse)
+            {
+                var args = delivery.Args;
+                label = $"reply::{args.Exchange}::{args.RoutingKey}";
+            }
+            else
+            {
+                label = delivery.Label.ToString();
+            }
+            this.logger.Warn(m => m("Failed to process message labeled [{0}] on queue [{1}].", label, this.endpoint.ListeningSource), exception);
 
             this.ReceiverOptions.GetFailedDeliveryStrategy()
                 .Value.Handle(new RabbitFailedConsumingContext(delivery, exception));
