@@ -475,7 +475,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     if (!busReady)
                     {
                         var waitMs = random.Next(200, 2000);
-                        await Task.Delay(waitMs, token);
+                        await Task.Delay(waitMs, token).ConfigureAwait(false);
 
                         totalWaitTimeMs += waitMs;
                         if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
