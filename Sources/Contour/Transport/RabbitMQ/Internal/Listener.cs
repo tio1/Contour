@@ -283,7 +283,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     return;
                 }
 
-                this.logger.InfoFormat("Starting consuming on [{0}].", this.endpoint.ListeningSource);
+                this.logger.DebugFormat("Starting consuming on [{0}].", this.endpoint.ListeningSource);
 
                 this.cancellationTokenSource = new CancellationTokenSource();
                 this.ticketTimer = new RoughTicketTimer(TimeSpan.FromSeconds(1));
@@ -458,7 +458,7 @@ namespace Contour.Transport.RabbitMQ.Internal
         {
             try
             {
-                var consumer = this.InitializeConsumer(token, out var channel);
+                var consumer = InitializeConsumer(token, out var channel);
 
                 var random = new Random(); // todo: use Random.Shared after migration to Net8
                 var totalWaitTimeMs = 0;
@@ -499,7 +499,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     return;
                 }
 
-                this.StartConsuming(consumer, channel, token);
+                StartConsuming(consumer, channel, token);
             }
             catch (OperationCanceledException e) when (e.CancellationToken == token)
             {
@@ -554,12 +554,32 @@ namespace Contour.Transport.RabbitMQ.Internal
 
         private void StartConsuming(AsyncEventingBasicConsumer consumer, RabbitChannel channel, CancellationToken token)
         {
-            consumer.Received += (s, e) => HandleMessage(e);
+            consumer.Received += HandleMessage;
 
             string tag = string.Empty;
 
-            async Task HandleMessage(BasicDeliverEventArgs args)
+            CancellationTokenRegistration cancellationCallbackRegistration = default;
+
+            cancellationCallbackRegistration = token.Register(UnsubscribeConsumer);
+
+            tag = channel.StartConsuming(
+                this.endpoint.ListeningSource,
+                ReceiverOptions.IsAcceptRequired(),
+                consumer);
+
+            this.logger.Trace(
+                $"A consumer tagged [{tag}] has been registered in listener of [{string.Join(",", this.AcceptedLabels)}]");
+
+            this.logger.Debug($"Listener {this} start consuming.");
+
+            async Task HandleMessage(object _, BasicDeliverEventArgs args)
             {
+                if (token.IsCancellationRequested)
+                {
+                    this.logger.Warn(x => x("Token was cancelled, but Listener [{0}] still receive messages.", this));
+                    return;
+                }
+
                 RabbitDelivery delivery = null;
                 try
                 {
@@ -581,32 +601,12 @@ namespace Contour.Transport.RabbitMQ.Internal
                 }
             }
 
-
-            CancellationTokenRegistration cancellationCallbackRegistration = default;
-
             void UnsubscribeConsumer()
             {
                 channel.StopConsuming(tag);
                 cancellationCallbackRegistration.Dispose();
+                consumer.Received -= HandleMessage;
             }
-
-            cancellationCallbackRegistration = token.Register(UnsubscribeConsumer);
-
-            if (token.IsCancellationRequested)
-            {
-                UnsubscribeConsumer();
-                return;
-            }
-
-            tag = channel.StartConsuming(
-                this.endpoint.ListeningSource,
-                ReceiverOptions.IsAcceptRequired(),
-                consumer);
-
-            this.logger.Trace(
-                $"A consumer tagged [{tag}] has been registered in listener of [{string.Join(",", this.AcceptedLabels)}]");
-
-            this.logger.Info($"Listner {this} start consuming.");
         }
 
         private void OnChannelShutdown(IChannel channel, ShutdownEventArgs args)
