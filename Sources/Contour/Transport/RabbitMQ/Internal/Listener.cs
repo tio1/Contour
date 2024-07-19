@@ -466,13 +466,8 @@ namespace Contour.Transport.RabbitMQ.Internal
                 var timesLogged = 0;
                 var busReady = false;
                 // если шина так и не стала готова работать, то не смысла начинать слушать сообщения, что бы потом их потерять
-                while (!busReady)
+                while (!busReady && !token.IsCancellationRequested)
                 {
-                    if (token.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
                     // IsReady use WaitHandle(0) under the hood.
                     // WaitHandle provide synchronous waiting and we want async, so using Task.Delay to free the thread
                     // Need to refactor WhenReady mechanism to be truly async
@@ -486,10 +481,10 @@ namespace Contour.Transport.RabbitMQ.Internal
                         if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
                         {
                             timesLogged++;
-                            this.logger.Warn(m => m(
+                            this.logger.WarnFormat(
                                 "Waiting when bus [{0}] will be ready took {1} seconds already. Continue waiting.",
                                 this.busContext.Endpoint.Address,
-                                totalWaitTimeMs / 1000));
+                                totalWaitTimeMs / 1000);
                         }
 
                     }
