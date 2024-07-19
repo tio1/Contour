@@ -462,31 +462,25 @@ namespace Contour.Transport.RabbitMQ.Internal
 
                 var random = new Random(); // todo: use Random.Shared after migration to Net8
                 var totalWaitTimeMs = 0;
-                const int WaitTimeBeforeLogMessage = 60_000;
                 var timesLogged = 0;
-                var busReady = false;
+                const int WaitTimeBeforeLogMessage = 60_000;
                 // если шина так и не стала готова работать, то не смысла начинать слушать сообщения, что бы потом их потерять
-                while (!busReady && !token.IsCancellationRequested)
+                while (!this.busContext.IsReady && !token.IsCancellationRequested)
                 {
                     // IsReady use WaitHandle(0) under the hood.
                     // WaitHandle provide synchronous waiting and we want async, so using Task.Delay to free the thread
                     // Need to refactor WhenReady mechanism to be truly async
-                    busReady = this.busContext.IsReady;
-                    if (!busReady)
+                    var waitMs = random.Next(200, 2000);
+                    await Task.Delay(waitMs, token).ConfigureAwait(false);
+
+                    totalWaitTimeMs += waitMs;
+                    if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
                     {
-                        var waitMs = random.Next(200, 2000);
-                        await Task.Delay(waitMs, token).ConfigureAwait(false);
-
-                        totalWaitTimeMs += waitMs;
-                        if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
-                        {
-                            timesLogged++;
-                            this.logger.WarnFormat(
-                                "Waiting when bus [{0}] will be ready took {1} seconds already. Continue waiting.",
-                                this.busContext.Endpoint.Address,
-                                totalWaitTimeMs / 1000);
-                        }
-
+                        timesLogged++;
+                        this.logger.WarnFormat(
+                            "Waiting when bus [{0}] will be ready took {1} seconds already. Continue waiting.",
+                            this.busContext.Endpoint.Address,
+                            totalWaitTimeMs / 1000);
                     }
                 }
 
