@@ -1,4 +1,4 @@
-﻿using Contour.Transport.RabbitMQ.Topology;
+using Contour.Transport.RabbitMQ.Topology;
 using RabbitMQ.Client;
 
 namespace Contour.Transport.RabbitMQ.Internal
@@ -223,7 +223,7 @@ namespace Contour.Transport.RabbitMQ.Internal
 
             if (consumer is IAsyncConsumerOf<T>)
             {
-                
+
                 consumingAction = delivery =>
                     {
                         IConsumingContext<T> context = delivery.BuildConsumingContext<T>(label);
@@ -237,7 +237,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                         {
                             this.validatorRegistry.Validate(context.Message);
                         }
-                        
+
                         return ((IAsyncConsumerOf<T>)consumer).HandleAsync(context);
                     };
             }
@@ -247,7 +247,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     {
                         IConsumingContext<T> context = delivery.BuildConsumingContext<T>(label);
 
-                        if (validator != null) 
+                        if (validator != null)
                         {
                             validator.Validate(context.Message)
                                 .ThrowIfBroken();
@@ -283,7 +283,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                     return;
                 }
 
-                this.logger.InfoFormat("Starting consuming on [{0}].", this.endpoint.ListeningSource);
+                this.logger.DebugFormat("Starting consuming on [{0}].", this.endpoint.ListeningSource);
 
                 this.cancellationTokenSource = new CancellationTokenSource();
                 this.ticketTimer = new RoughTicketTimer(TimeSpan.FromSeconds(1));
@@ -291,15 +291,9 @@ namespace Contour.Transport.RabbitMQ.Internal
                 var count = (int)this.ReceiverOptions.GetParallelismLevel().Value;
                 var token = this.cancellationTokenSource.Token;
 
-                // In order to increase the performance of the listener on startup the task factory should be configured to create long running tasks. These tasks will run on dedicated threads instead of thread pool threads which may be created with delays in certain conditions. As a workaround for this condition one can set the minimum number of threads created by the pool before switching the thread creation policy. See https://stackoverflow.com/questions/22036365/newly-created-threads-using-task-factory-startnew-starts-very-slowly for details.
-
                 this.workers = new ConcurrentBag<Task>(Enumerable
                     .Range(0, count)
-                    .Select(async 
-                        _ => await 
-                            Task.Factory.StartNew(async 
-                                () => await this.ConsumerTaskMethod(token), token, TaskCreationOptions.LongRunning,
-                                TaskScheduler.Default)));
+                    .Select(async _ => await ConsumerFactoryMethod(token).ConfigureAwait(false)));
 
                 this.isConsuming = true;
                 this.logger.Trace("Listener's workers started successfully");
@@ -361,7 +355,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             var stopwatch = Stopwatch.StartNew();
 
             try
-            {   
+            {
                 // тут не происходит ничего, что можно было бы сделать асинхронно
                 var processed = this.TryHandleAsResponse(delivery);
 
@@ -455,48 +449,49 @@ namespace Contour.Transport.RabbitMQ.Internal
         }
 
         /// <summary>
-        /// Обрабатывает сообщение.
+        /// Создаёт потребителя сообщений.
         /// </summary>
         /// <param name="token">
         /// Сигнальный объект аварийного досрочного завершения обработки.
         /// </param>
-        private async Task ConsumerTaskMethod(CancellationToken token)
+        private async Task ConsumerFactoryMethod(CancellationToken token)
         {
             try
             {
-                var consumer = this.InitializeConsumer(token, out var channel);
+                var consumer = InitializeConsumer(token, out var channel);
 
-                var waitSecond = 0;
+                var random = new Random(); // todo: use Random.Shared after migration to Net8
+                var totalWaitTimeMs = 0;
+                var timesLogged = 0;
+                const int WaitTimeBeforeLogMessage = 60_000;
                 // если шина так и не стала готова работать, то не смысла начинать слушать сообщения, что бы потом их потерять
-                while (true)
+                while (!this.busContext.IsReady && !token.IsCancellationRequested)
                 {
-                    if (token.IsCancellationRequested)
+                    // IsReady use WaitHandle(0) under the hood.
+                    // WaitHandle provide synchronous waiting and we want async, so using Task.Delay to free the thread
+                    // Need to refactor WhenReady mechanism to be truly async
+                    var waitMs = random.Next(200, 2000);
+                    await Task.Delay(waitMs, token).ConfigureAwait(false);
+
+                    totalWaitTimeMs += waitMs;
+                    if (totalWaitTimeMs > (timesLogged + 1) * WaitTimeBeforeLogMessage)
                     {
-                        return;
-                    }
-                    
-                    if (!this.busContext.WhenReady.WaitOne(60000))
-                    {
-                        waitSecond += 60;
-                        this.logger.Warn(m => m ("Wait when bus [{0}] will be ready already {1} seconds. Continue waiting.", this.busContext.Endpoint.Address, waitSecond));
-                    }
-                    else
-                    {
-                        break;
+                        timesLogged++;
+                        this.logger.WarnFormat(
+                            "Waiting when bus [{0}] will be ready took {1} seconds already. Continue waiting.",
+                            this.busContext.Endpoint.Address,
+                            totalWaitTimeMs / 1000);
                     }
                 }
 
-                this.StartConsuming(consumer, channel);
-
-                this.logger.Info($"Listner {this} start consuming.");
-
-                while (!token.IsCancellationRequested)
+                if (token.IsCancellationRequested)
                 {
-                    var message = consumer.Dequeue();
-                    await this.Deliver(this.BuildDeliveryFrom(channel, message));
+                    return;
                 }
+
+                StartConsuming(consumer, channel, token);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException e) when (e.CancellationToken == token)
             {
                 this.logger.Info("Consume operation of listener has been canceled");
             }
@@ -529,7 +524,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             return new Expectation(d => this.BuildResponse(d, expectedResponseType), timeoutTicket);
         }
 
-        private CancellableQueueingConsumer InitializeConsumer(CancellationToken token, out RabbitChannel channel)
+        private AsyncEventingBasicConsumer InitializeConsumer(CancellationToken token, out RabbitChannel channel)
         {
             // Opening a new channel may lead to a new connection creation
             channel = this.connection.OpenChannel(token);
@@ -542,21 +537,66 @@ namespace Contour.Transport.RabbitMQ.Internal
                     this.ReceiverOptions.GetQoS().Value);
             }
 
-            var consumer = channel.BuildCancellableConsumer(token);
-           
+            var consumer = channel.BuildConsumer();
 
             return consumer;
         }
 
-        private void StartConsuming(IBasicConsumer consumer, RabbitChannel channel)
+        private void StartConsuming(AsyncEventingBasicConsumer consumer, RabbitChannel channel, CancellationToken token)
         {
-            var tag = channel.StartConsuming(
+            consumer.Received += HandleMessage;
+
+            string tag = string.Empty;
+
+            CancellationTokenRegistration cancellationCallbackRegistration = default;
+
+            cancellationCallbackRegistration = token.Register(UnsubscribeConsumer);
+
+            tag = channel.StartConsuming(
                 this.endpoint.ListeningSource,
-                this.ReceiverOptions.IsAcceptRequired(),
+                ReceiverOptions.IsAcceptRequired(),
                 consumer);
 
             this.logger.Trace(
                 $"A consumer tagged [{tag}] has been registered in listener of [{string.Join(",", this.AcceptedLabels)}]");
+
+            this.logger.Debug($"Listener start consuming.");
+
+            async Task HandleMessage(object _, BasicDeliverEventArgs args)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    this.logger.WarnFormat("Token was cancelled, but Listener still receive messages. Routing key [{0}], exchange [{1}].", args.RoutingKey, args.Exchange);
+                    return;
+                }
+
+                RabbitDelivery delivery = null;
+                try
+                {
+                    delivery = BuildDeliveryFrom(channel, args);
+                }
+                catch (Exception e)
+                {
+                    this.logger.Fatal(x => x("Delivery object has not been constructed, fetch a follow messages of the consumer for '{0}' is unpossible.", this.endpoint.ListeningSource.Address), e);
+                    throw;
+                }
+
+                try
+                {
+                    await Deliver(delivery).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    OnFailure(delivery, e);
+                }
+            }
+
+            void UnsubscribeConsumer()
+            {
+                channel.StopConsuming(tag);
+                cancellationCallbackRegistration.Dispose();
+                consumer.Received -= HandleMessage;
+            }
         }
 
         private void OnChannelShutdown(IChannel channel, ShutdownEventArgs args)
@@ -591,7 +631,17 @@ namespace Contour.Transport.RabbitMQ.Internal
         /// </param>
         private void OnFailure(RabbitDelivery delivery, Exception exception)
         {
-            this.logger.Warn(m => m("Failed to process message labeled [{0}] on queue [{1}].", delivery.Label, this.endpoint.ListeningSource), exception);
+            string label = string.Empty;
+            if (delivery.IsResponse)
+            {
+                var args = delivery.Args;
+                label = $"reply::{args.Exchange}::{args.RoutingKey}";
+            }
+            else
+            {
+                label = delivery.Label.ToString();
+            }
+            this.logger.Warn(m => m("Failed to process message labeled [{0}] on queue [{1}].", label, this.endpoint.ListeningSource), exception);
 
             this.ReceiverOptions.GetFailedDeliveryStrategy()
                 .Value.Handle(new RabbitFailedConsumingContext(delivery, exception));
@@ -680,7 +730,7 @@ namespace Contour.Transport.RabbitMQ.Internal
             if (consumingAction != null)
             {
                 this.messageHeaderStorage.Store(delivery.Headers);
-                await consumingAction(delivery);
+                await consumingAction(delivery).ConfigureAwait(false);
                 return true;
             }
 
