@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Contour.Helpers;
 
 namespace Contour.Transport.RabbitMQ.Topology
 {
@@ -102,7 +103,7 @@ namespace Contour.Transport.RabbitMQ.Topology
         public QueueBuilder WithHeaders(IDictionary<string, object> arguments)
         {
             this.Instance.Arguments = arguments;
-            this.Instance.Arguments["x-match"] = "all";
+            this.Instance.Arguments[Headers.MatchHeaders] = "all";
             return this;
         }
     }

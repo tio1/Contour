@@ -55,6 +55,8 @@ namespace Contour
 
         public static readonly string DirectId = "direct-id";
 
+        public static readonly string MatchHeaders = "x-match";
+
         /// <summary>
         /// Время жизни сообщений в очереди.
         /// </summary>
