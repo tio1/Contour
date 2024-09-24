@@ -23,6 +23,7 @@ namespace Contour.Transport.RabbitMQ.Topology
             this.Durable = false;
             this.Exclusive = false;
             this.AutoDelete = false;
+            this.Arguments = new Dictionary<string, object>();
         }
 
         public IDictionary<string, object> Arguments { get; internal set; }
