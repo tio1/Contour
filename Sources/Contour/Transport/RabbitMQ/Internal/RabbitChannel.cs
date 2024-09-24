@@ -103,7 +103,7 @@ namespace Contour.Transport.RabbitMQ.Internal
         {
             try
             {
-                this.SafeNativeInvoke(n => n.QueueBind(queue.Name, exchange.Name, routingKey));
+                this.SafeNativeInvoke(n => n.QueueBind(queue.Name, exchange.Name, routingKey, queue.Arguments));
             }
             catch (Exception e)
             {

@@ -2,6 +2,7 @@
 
 using Contour.Receiving;
 using Contour.Topology;
+using System.Collections.Generic;
 
 namespace Contour.Transport.RabbitMQ.Topology
 {
@@ -23,6 +24,8 @@ namespace Contour.Transport.RabbitMQ.Topology
             this.Exclusive = false;
             this.AutoDelete = false;
         }
+
+        public IDictionary<string, object> Arguments { get; internal set; }
 
         /// <summary>
         /// Адрес очереди.
