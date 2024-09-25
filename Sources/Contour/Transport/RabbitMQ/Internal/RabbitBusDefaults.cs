@@ -79,11 +79,7 @@ namespace Contour.Transport.RabbitMQ.Internal
                 queueBuilder = Queue
                     .Named(queueName)
                     .AutoDelete
-                    .Exclusive
-                    .WithHeaders(new Dictionary<string, object>()
-                    {
-                        { Headers.DirectId, builder.Receiver.Options.DirectId }
-                    });
+                    .Exclusive;
             }
             else
             {
@@ -122,7 +118,17 @@ namespace Contour.Transport.RabbitMQ.Internal
             
             Exchange exchange = builder.Topology.Declare(exchangeBuilder);
 
-            builder.Topology.Bind(exchange, queue);
+            Dictionary<string, object> arguments = null;
+            if (builder.Receiver.Options.Direct)
+            {
+                arguments = new Dictionary<string, object>()
+                {
+                    { Headers.DirectId, builder.Receiver.Options.DirectId },
+                    { Headers.MatchHeaders, "all" },
+                };
+            }
+
+            builder.Topology.Bind(exchange, queue, "", arguments);
 
             return builder.ListenTo(queue, exchange);
         }

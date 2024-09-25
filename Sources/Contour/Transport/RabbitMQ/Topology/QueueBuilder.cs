@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Contour.Helpers;
 
 namespace Contour.Transport.RabbitMQ.Topology
 {
@@ -97,13 +96,6 @@ namespace Contour.Transport.RabbitMQ.Topology
         public QueueBuilder WithMaxLengthBytes(int bytes)
         {
             this.Instance.MaxLengthBytes = bytes;
-            return this;
-        }
-
-        public QueueBuilder WithHeaders(IDictionary<string, object> arguments)
-        {
-            this.Instance.Arguments = arguments;
-            this.Instance.Arguments[Headers.MatchHeaders] = "all";
             return this;
         }
     }
